@@ -1,0 +1,371 @@
+<title>Предполётный чеклист</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: кабинный пульт. Слева пилот с репликой, справа бланк чеклиста с пунктирными выводками и штампом статуса. */
+:root {
+  --panel: #15181b;
+  --panel-2: #1d2226;
+  --paper: #e9e4d3;
+  --ink: #16191b;
+  --line: #3a4147;
+  --muted: #8d979e;
+  --amber: #f2a900;
+  --go: #46d17e;
+  --alarm: #ff4b3a;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--panel);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  padding-inline: 16px;
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1000px; margin-inline: auto; display: grid; gap: 20px; }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
+h1 { font: 700 clamp(28px, 6vw, 44px)/1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; margin: 0; }
+.meta { color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; text-align: right; }
+.meta b { color: var(--amber); font-weight: 500; }
+
+.cockpit { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .cockpit { grid-template-columns: 1fr; } }
+
+.pilot-card { background: var(--panel-2); border: 1px solid var(--line); padding: 16px; display: grid; gap: 14px; position: sticky; top: env(safe-area-inset-top, 0px); }
+@media (max-width: 760px) { .pilot-card { position: static; } }
+.pilot-card svg { width: 100%; max-width: 220px; height: auto; margin-inline: auto; display: block; }
+.bubble { position: relative; background: var(--paper); color: var(--ink); padding: 12px 14px; font-weight: 500; font-size: 14px; border-radius: 2px; min-height: 5.5em; }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 16px; height: 16px; background: var(--paper); transform: translateX(-50%) rotate(45deg); }
+.state-alarm .bubble { background: var(--alarm); color: #fff; }
+.state-alarm .bubble::after { background: var(--alarm); }
+.state-go .bubble { background: var(--go); }
+.state-go .bubble::after { background: var(--go); }
+.callsign { font: 600 12px var(--font-display); letter-spacing: .18em; color: var(--muted); text-transform: uppercase; text-align: center; margin-top: 4px; }
+
+.gauge { display: grid; gap: 6px; }
+.gauge-label { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.gauge-bar { height: 10px; background: var(--panel); border: 1px solid var(--line); position: relative; }
+.gauge-fill { height: 100%; background: var(--amber); transition: width .4s ease, background .3s; }
+.state-go .gauge-fill { background: var(--go); }
+.state-alarm .gauge-fill { background: var(--alarm); }
+
+.sheet { background: var(--paper); color: var(--ink); padding: 20px 18px 24px; display: grid; gap: 16px; border-radius: 2px; min-width: 0; }
+.sheet h2 { font: 700 22px var(--font-display); letter-spacing: .12em; text-transform: uppercase; margin: 0; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+.sheet h2 small { font: 500 12px var(--font-mono); letter-spacing: .05em; align-self: flex-end; }
+
+ul { list-style: none; margin: 0; padding: 0; display: grid; }
+li { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid rgba(22,25,27,.15); }
+.row { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; background: none; border: 0; color: inherit; font: inherit; text-align: left; padding: 11px 0; cursor: pointer; }
+.row .txt { font: 600 18px/1.2 var(--font-display); letter-spacing: .05em; text-transform: uppercase; overflow-wrap: anywhere; }
+.row .dots { flex: 1; min-width: 12px; border-bottom: 2px dotted rgba(22,25,27,.4); transform: translateY(-4px); }
+.stamp { font: 500 11px var(--font-mono); letter-spacing: .08em; padding: 2px 6px; border: 2px solid currentColor; text-transform: uppercase; white-space: nowrap; }
+.pending .stamp { color: var(--ink); }
+.crit.pending .stamp { color: var(--alarm); }
+.dormant { opacity: .55; }
+.crit.dormant .txt::before { content: ""; }
+.dormant .stamp { color: #55606a !important; border-style: dashed; }
+.crit.pending .txt::before { content: "▲ "; color: var(--alarm); }
+.done .stamp { color: #1c7d46; transform: rotate(-3deg); }
+.done .txt { text-decoration: line-through; text-decoration-thickness: 2px; opacity: .5; }
+.tag { font-size: 10px; color: #55606a; letter-spacing: .06em; white-space: nowrap; }
+.del { background: none; border: 0; color: #55606a; font-size: 18px; cursor: pointer; padding: 6px 8px; line-height: 1; }
+.del:hover { color: var(--alarm); }
+.row:focus-visible, .del:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.empty { padding: 20px 0; font-weight: 500; }
+
+form { display: grid; gap: 10px; border-top: 2px solid var(--ink); padding-top: 14px; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; }
+input[type=text] { flex: 1; min-width: 0; font: 500 15px var(--font-mono); background: #fff; color: var(--ink); border: 2px solid var(--ink); padding: 10px 12px; border-radius: 0; }
+button.add { font: 700 16px var(--font-display); letter-spacing: .12em; text-transform: uppercase; background: var(--ink); color: var(--paper); border: 0; padding: 10px 18px; cursor: pointer; }
+button.add:hover { background: #000; }
+.opts { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; }
+.opts label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.opts input { accent-color: var(--ink); width: 16px; height: 16px; }
+
+.log { background: var(--panel-2); border: 1px solid var(--line); padding: 16px; display: grid; gap: 10px; }
+.log h3 { margin: 0; font: 600 14px var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; }
+.day { aspect-ratio: 1; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; font-size: 10px; color: var(--muted); }
+.day.ok { background: var(--go); color: #06260f; border-color: var(--go); }
+.day.bad { background: var(--alarm); color: #fff; border-color: var(--alarm); }
+.day.part { background: var(--amber); color: #2b1d00; border-color: var(--amber); }
+.day.today { outline: 2px solid var(--paper); outline-offset: 1px; }
+.legend { font-size: 11px; color: var(--muted); }
+footer { font-size: 11px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .gauge-fill { transition: none; } .sweat { animation: none !important; } }
+.sweat { animation: drip 1.2s ease-in infinite; }
+@keyframes drip { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
+</style>
+
+<div class="wrap" id="app" data-state="warn">
+  <header>
+    <h1>Предполётный чеклист</h1>
+    <div class="meta"><div id="date">—</div><div>Серия безаварийных дней: <b id="streak">0</b></div></div>
+  </header>
+
+  <div class="cockpit" id="cockpit">
+    <aside class="pilot-card">
+      <svg viewBox="0 0 220 240" role="img" aria-label="Пилот смотрит на вас" id="pilot">
+        <!-- shoulders -->
+        <path d="M10 240 C10 190 50 170 110 170 C170 170 210 190 210 240 Z" fill="#26323f"/>
+        <path d="M95 170 L110 205 L125 170 Z" fill="#e9e4d3"/>
+        <rect x="40" y="188" width="26" height="8" fill="#f2a900"/><rect x="40" y="200" width="26" height="8" fill="#f2a900"/>
+        <rect x="154" y="188" width="26" height="8" fill="#f2a900"/><rect x="154" y="200" width="26" height="8" fill="#f2a900"/>
+        <!-- neck + head -->
+        <rect x="95" y="145" width="30" height="30" fill="#d9a77f"/>
+        <ellipse cx="110" cy="105" rx="48" ry="55" fill="#e8b88f"/>
+        <!-- headset -->
+        <path d="M60 100 C58 50 162 50 160 100" fill="none" stroke="#0e1114" stroke-width="7"/>
+        <rect x="52" y="95" width="14" height="30" rx="5" fill="#0e1114"/><rect x="154" y="95" width="14" height="30" rx="5" fill="#0e1114"/>
+        <path d="M60 122 C62 150 90 150 98 142" fill="none" stroke="#0e1114" stroke-width="4"/><circle cx="100" cy="141" r="5" fill="#0e1114"/>
+        <!-- cap -->
+        <path d="M58 72 C60 28 160 28 162 72 Z" fill="#1d2b3a"/>
+        <rect x="56" y="66" width="108" height="12" fill="#101820"/>
+        <path d="M110 44 l5 9 10 1 -8 7 3 10 -10 -6 -10 6 3 -10 -8 -7 10 -1 z" fill="#f2a900"/>
+        <!-- brows -->
+        <path id="browL" d="M74 88 L100 90" stroke="#3a2a1e" stroke-width="5" stroke-linecap="round"/>
+        <path id="browR" d="M146 88 L120 90" stroke="#3a2a1e" stroke-width="5" stroke-linecap="round"/>
+        <!-- aviators -->
+        <rect x="70" y="96" width="36" height="26" rx="12" fill="#0b0e10"/><rect x="114" y="96" width="36" height="26" rx="12" fill="#0b0e10"/>
+        <rect x="106" y="104" width="8" height="3" fill="#0b0e10"/>
+        <path d="M76 101 l10 -2 M120 101 l10 -2" stroke="#6b7a86" stroke-width="2" stroke-linecap="round"/>
+        <!-- nose + mouth -->
+        <path d="M110 112 l-5 18 h10" fill="none" stroke="#b9855f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path id="mouth" d="M94 144 L126 144" fill="none" stroke="#5a2f22" stroke-width="5" stroke-linecap="round"/>
+        <g id="sweat" class="sweat" hidden><path d="M152 80 q5 9 0 12 q-5 -3 0 -12z" fill="#7fd0ff"/></g>
+      </svg>
+      <div class="bubble" id="bubble" aria-live="polite"></div>
+      <div class="gauge">
+        <div class="gauge-label"><span>Высота</span><span id="gauge-n">0 / 0</span></div>
+        <div class="gauge-bar"><div class="gauge-fill" id="gauge-fill" style="width:0"></div></div>
+      </div>
+      <div class="callsign">Капитан · Борт «Завтра»</div>
+    </aside>
+
+    <section class="sheet">
+      <h2>Перед взлётом <small id="count">—</small></h2>
+      <ul id="list"></ul>
+      <form id="form" autocomplete="off">
+        <div class="addrow">
+          <input type="text" id="newtext" placeholder="Новый пункт: что должно быть сделано сегодня" maxlength="120" aria-label="Новый пункт чеклиста">
+          <button class="add" type="submit">В чеклист</button>
+        </div>
+        <div class="opts">
+          <label for="newcrit"><input type="checkbox" id="newcrit"> Критично</label>
+          <label for="newdaily"><input type="checkbox" id="newdaily"> Каждый день</label>
+          <label for="newnight"><input type="checkbox" id="newnight"> Вечерний (с 20:00)</label>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <section class="log">
+    <h3><span>Бортовой журнал · 14 дней</span><span class="legend">зелёный — всё закрыто · жёлтый — частично · красный — падение</span></h3>
+    <div class="days" id="days"></div>
+  </section>
+  <footer id="storage-note"></footer>
+</div>
+
+<script>
+(function () {
+  var KEY = "preflight-v1";
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { date: "", tasks: [], log: {} };
+  var backend = null; // db doc ref or null
+
+  // Сутки начинаются в 05:00, чтобы отход ко сну в 02–03 не сбрасывал пункты до того, как их закрыли.
+  function today() {
+    var d = new Date(Date.now() - 5 * 3600 * 1000);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+
+  var SEED = [
+    { id: uid(), text: "Проверить, что на самом деле нужно сделать сегодня", crit: true, daily: true, done: false },
+    { id: uid(), text: "Одно действие по главной цели", crit: true, daily: true, done: false },
+    { id: uid(), text: "Поесть нормально, не сидеть на энергетиках", crit: false, daily: true, done: false }
+  ];
+
+  function rollover(s) {
+    var t = today();
+    if (!s.date) { s.date = t; return s; }
+    if (s.date === t) return s;
+    var total = s.tasks.length, done = s.tasks.filter(function (x) { return x.done; }).length;
+    if (total) s.log[s.date] = { done: done, total: total };
+    s.tasks = s.tasks.filter(function (x) { return x.daily || !x.done; }).map(function (x) {
+      return { id: x.id, text: x.text, crit: x.crit, daily: x.daily, night: x.night, done: false, carried: !x.daily };
+    });
+    s.date = t;
+    return s;
+  }
+
+  var saveTimer = null;
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    if (!backend) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { backend.set({ json: JSON.stringify(state) }).catch(function () {}); }, 300);
+  }
+
+  function readLocal() {
+    try { var r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; }
+  }
+
+  function boot(loaded) {
+    state = loaded || { date: "", tasks: SEED, log: {} };
+    if (!state.log) state.log = {};
+    rollover(state);
+    save();
+    render();
+  }
+
+  // Start immediately from local copy, then upgrade to shared storage when it answers.
+  boot(readLocal());
+  $("storage-note").textContent = "Данные хранятся в этом браузере.";
+  (async function () {
+    try {
+      if (!window.claude || !window.claude.use) return;
+      var user = await window.claude.use("user");
+      var db = await window.claude.use("db");
+      if (!user || !db) return;
+      var id = await user.id();
+      if (!id) return;
+      var ref = db.collection("data/users/" + id).doc("flight");
+      var snap = await ref.get();
+      var remote = null;
+      if (snap.exists) { try { remote = JSON.parse(snap.data().json); } catch (e) {} }
+      backend = ref;
+      if (remote) { boot(remote); }
+      else { save(); }
+      $("storage-note").textContent = "Данные синхронизируются с вашим аккаунтом.";
+    } catch (e) { backend = null; }
+  })();
+
+  // Вечерние пункты (сон) не давят днём: считаются с 20:00 до 05:00.
+  function isEvening() { var h = new Date().getHours(); return h >= 20 || h < 5; }
+  function active(t) { return !t.night || isEvening(); }
+  function stats() {
+    var act = state.tasks.filter(active);
+    var total = act.length, done = act.filter(function (t) { return t.done; }).length;
+    var critLeft = act.filter(function (t) { return t.crit && !t.done; }).length;
+    return { total: total, done: done, left: total - done, critLeft: critLeft };
+  }
+
+  function pilotSays(s) {
+    var h = new Date().getHours();
+    if (!s.total) return { mood: "warn", text: "Чеклист пуст. Значит, ты летишь вслепую. Впиши, что должно быть сделано сегодня." };
+    if (!s.left) return { mood: "go", text: "Все пункты закрыты. Разрешаю взлёт. Завтра проверю снова." };
+    if (h >= 23 || h < 5) return { mood: "alarm", text: "Время вышло. Осталось пунктов: " + s.left + ". Борт теряет высоту. Закрывай прямо сейчас." };
+    if (s.critLeft) return { mood: "alarm", text: "Критичных пунктов не закрыто: " + s.critLeft + ". Не сделаешь — самолёт разобьётся. Это не шутка, это твой день." };
+    if (s.done === 0) return { mood: "warn", text: "Ни один пункт не проверен. Двигатели не запущены. Начинай с первой строки." };
+    return { mood: "warn", text: "Осталось " + s.left + " из " + s.total + ". Ты всё ещё в воздухе, но не расслабляйся." };
+  }
+
+  function setFace(mood, calmFinish) {
+    var mouth = $("mouth"), bl = $("browL"), br = $("browR");
+    if (mood === "go") {
+      mouth.setAttribute("d", "M92 140 Q110 156 128 140");
+      bl.setAttribute("d", "M74 86 L100 84"); br.setAttribute("d", "M146 86 L120 84");
+    } else if (mood === "alarm") {
+      mouth.setAttribute("d", "M94 150 Q110 136 126 150");
+      bl.setAttribute("d", "M74 82 L100 92"); br.setAttribute("d", "M146 82 L120 92");
+    } else {
+      mouth.setAttribute("d", "M94 144 L126 144");
+      bl.setAttribute("d", "M74 88 L100 90"); br.setAttribute("d", "M146 88 L120 90");
+    }
+    $("sweat").hidden = mood !== "alarm";
+  }
+
+  function render() {
+    var s = stats(), say = pilotSays(s);
+    var app = $("app");
+    app.className = "wrap state-" + say.mood;
+    $("cockpit").className = "cockpit state-" + say.mood;
+    $("bubble").textContent = say.text;
+    setFace(say.mood);
+    $("gauge-n").textContent = s.done + " / " + s.total;
+    $("gauge-fill").style.width = (s.total ? Math.round(s.done / s.total * 100) : 0) + "%";
+    $("count").textContent = s.total ? ("Не закрыто: " + s.left) : "Пусто";
+    $("date").textContent = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+
+    var list = $("list");
+    list.textContent = "";
+    if (!state.tasks.length) {
+      var e = document.createElement("li");
+      e.innerHTML = '<span class="empty">Пунктов нет. Добавь первый ниже.</span>';
+      list.appendChild(e);
+    }
+    state.tasks.slice().sort(function (a, b) {
+      return (a.done - b.done) || ((b.crit ? 1 : 0) - (a.crit ? 1 : 0));
+    }).forEach(function (t) {
+      var li = document.createElement("li");
+      var dormant = !active(t);
+      li.className = (t.done ? "done" : "pending") + (t.crit ? " crit" : "") + (dormant ? " dormant" : "");
+      var row = document.createElement("button");
+      row.type = "button"; row.className = "row";
+      row.setAttribute("aria-pressed", t.done ? "true" : "false");
+      var txt = document.createElement("span"); txt.className = "txt"; txt.textContent = t.text;
+      var dots = document.createElement("span"); dots.className = "dots";
+      var st = document.createElement("span"); st.className = "stamp"; st.textContent = t.done ? "Проверено" : (dormant ? "С 20:00" : "Ожидает");
+      row.append(txt, dots, st);
+      row.addEventListener("click", function () { t.done = !t.done; save(); render(); });
+      li.appendChild(row);
+      var tag = [];
+      if (t.daily) tag.push("↻"); if (t.night) tag.push("☾"); if (t.carried) tag.push("вчера");
+      if (tag.length) { var g = document.createElement("span"); g.className = "tag"; g.textContent = tag.join(" "); li.appendChild(g); }
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "del"; del.textContent = "×"; del.setAttribute("aria-label", "Удалить пункт: " + t.text);
+      del.addEventListener("click", function () { state.tasks = state.tasks.filter(function (x) { return x.id !== t.id; }); save(); render(); });
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+
+    renderLog();
+  }
+
+  function renderLog() {
+    var box = $("days"); box.textContent = "";
+    var now = new Date(Date.now() - 5 * 3600 * 1000), streak = 0, counting = true;
+    var cells = [];
+    for (var i = 13; i >= 0; i--) {
+      var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      var key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      var rec = key === state.date ? (function () { var s = stats(); return s.total ? { done: s.done, total: s.total } : null; })() : state.log[key];
+      cells.push({ key: key, day: d.getDate(), rec: rec, isToday: i === 0 });
+    }
+    cells.forEach(function (c) {
+      var el = document.createElement("div"); el.className = "day";
+      if (c.isToday) el.classList.add("today");
+      el.textContent = c.day;
+      if (c.rec) {
+        el.title = c.key + ": " + c.rec.done + " из " + c.rec.total;
+        if (c.rec.done === c.rec.total) el.classList.add("ok");
+        else if (!c.isToday) el.classList.add(c.rec.done === 0 ? "bad" : "part");
+        else if (c.rec.done > 0) el.classList.add("part");
+      }
+      box.appendChild(el);
+    });
+    for (var j = cells.length - 1; j >= 0; j--) {
+      var c = cells[j], full = c.rec && c.rec.done === c.rec.total;
+      if (full) streak++;
+      else if (c.isToday) continue;
+      else break;
+    }
+    $("streak").textContent = streak;
+  }
+
+  $("form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var input = $("newtext"), v = input.value.trim();
+    if (!v) { input.focus(); return; }
+    state.tasks.push({ id: uid(), text: v, crit: $("newcrit").checked, daily: $("newdaily").checked, night: $("newnight").checked, done: false });
+    input.value = "";
+    save(); render(); input.focus();
+  });
+})();
+</script>
